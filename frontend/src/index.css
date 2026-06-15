@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+}
+
+.rdp {
+  --rdp-cell-size: 36px;
+  --rdp-accent-color: #6366f1;
+  --rdp-background-color: rgba(99, 102, 241, 0.1);
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.dark .rdp {
+  --rdp-accent-color: #818cf8;
+  --rdp-background-color: rgba(99, 102, 241, 0.15);
+  color: #e2e8f0;
+}
+
+.rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+  background-color: var(--rdp-background-color);
+}
+
+.rdp-day_selected,
+.rdp-day_selected:focus-visible,
+.rdp-day_selected:hover {
+  background-color: var(--rdp-accent-color);
+  color: white;
+}
