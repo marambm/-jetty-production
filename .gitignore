@@ -4,3 +4,6 @@ node_modules/
 *.rar
 dist/
 .DS_Store
+ai-service/venv/
+ai-service/__pycache__/
+*.pyc
