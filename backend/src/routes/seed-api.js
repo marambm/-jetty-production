@@ -1,17 +1,16 @@
 import express from "express";
-import { execFile } from "child_process";
-import { fileURLToPath } from "url";
-import path from "path";
+import mongoose from "mongoose";
+import ProductionDaily from "../models/ProductionDaily.js";
 
 const router = express.Router();
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-router.post("/run-seed", async (req, res) => {
-  const seedPath = path.join(__dirname, "../routes/seed.js");
-  execFile("node", [seedPath], (err, stdout, stderr) => {
-    if (err) return res.json({ ok: false, error: stderr });
-    res.json({ ok: true, output: stdout });
-  });
+router.get("/run-seed", async (req, res) => {
+  try {
+    const count = await ProductionDaily.countDocuments();
+    res.json({ ok: true, count, message: "Collection found" });
+  } catch(e) {
+    res.json({ ok: false, error: e.message });
+  }
 });
 
 export default router;

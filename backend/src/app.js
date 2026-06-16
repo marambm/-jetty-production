@@ -18,6 +18,7 @@ import workUnitRoutes from "./routes/workUnits.js";
 import usersRoutes from "./routes/users.js";
 import employeePerformanceRouter from "./routes/employeePerformance.js";
 import auditRoutes from "./routes/audit.js";
+import seedApiRoute from "./routes/seed-api.js";
 
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 import auditMiddleware from "./middlewares/audit.js";
@@ -60,6 +61,7 @@ app.use("/api", syncRoutes);
 app.use("/api", forecastRoutes);
 app.use("/api", workUnitRoutes);
 app.use("/api", seedRoute);
+app.use("/api", seedApiRoute);
 
 // ── Servir le frontend React en production ────────────────────────────────────
 if (process.env.NODE_ENV === "production") {
