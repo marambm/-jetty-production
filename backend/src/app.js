@@ -21,6 +21,7 @@ import auditRoutes from "./routes/audit.js";
 
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 import auditMiddleware from "./middlewares/audit.js";
+import seedRoute from "./routes/seed-api.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +59,7 @@ app.use("/api", debugRoutes);
 app.use("/api", syncRoutes);
 app.use("/api", forecastRoutes);
 app.use("/api", workUnitRoutes);
+app.use("/api", seedRoute);
 
 // ── Servir le frontend React en production ────────────────────────────────────
 if (process.env.NODE_ENV === "production") {
