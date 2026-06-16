@@ -1,10 +1,12 @@
+import dotenv from "dotenv";
+dotenv.config();
 import mongoose from "mongoose";
 import ProductionDaily from "../models/ProductionDaily.js";
 
 await mongoose.connect(
   process.env.MONGODB_URI || "mongodb://localhost:27017/jetty"
 );
-console.log("MongoDB connecté");
+console.log("MongoDB connecté à:", mongoose.connection.db.databaseName);
 
 const WORK_UNITS = ["WU-A1", "WU-B1", "WU-C1"];
 
@@ -33,7 +35,6 @@ const WU_CONFIG = {
   "WU-C1": { base: 550, trend: 0.10, noiseRatio: 0.045, breakdownProb: 0.020, label: "Ligne Portes / Toiture" },
 };
 
-// ─── Jours fériés ────────────────────────────────────────────
 function isTunisianHoliday(dateStr) {
   const FIXED_HOLIDAYS = new Set([
     "01-01","03-20","04-09","05-01","07-25","08-13","10-15","12-17",
@@ -73,7 +74,6 @@ const STRIKE_DAYS = new Set([
   "2025-10-07","2025-10-08",
 ]);
 
-// ─── FIX 3 : Maintenance reportée au prochain jour ouvré ─────
 const MAINTENANCE_DAY_OF_MONTH = { "WU-A1": 5, "WU-B1": 12, "WU-C1": 19 };
 
 function buildMaintenanceDates(startDate, endDate) {
@@ -82,7 +82,6 @@ function buildMaintenanceDates(startDate, endDate) {
     const targetDay = MAINTENANCE_DAY_OF_MONTH[wu];
     let d = new Date(startDate);
     while (d <= endDate) {
-      // Premier jour ouvré >= targetDay dans ce mois
       let candidate = new Date(d.getFullYear(), d.getMonth(), targetDay);
       while (
         [0, 6].includes(candidate.getDay()) ||
@@ -105,18 +104,16 @@ const MONTHLY_FACTORS = {
   6:0.85,7:0.82,8:1.02,9:1.06,10:1.07,11:0.88,
 };
 
-// ─── Utilitaires ─────────────────────────────────────────────
 function random(min, max)      { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function randomFloat(min, max) { return min + Math.random() * (max - min); }
 function randomChoice(arr)     { return arr[Math.floor(Math.random() * arr.length)]; }
 function formatDate(date)      { return date.toISOString().split("T")[0]; }
 
-// FIX 4 : bruit gaussien borné à ±2 sigma
 function gaussianNoise() {
   const u1 = Math.random() || 1e-10;
   const u2 = Math.random();
   const raw = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return Math.max(-2, Math.min(2, raw)); // ← borne ±2σ
+  return Math.max(-2, Math.min(2, raw));
 }
 
 function getWeekNumber(d) {
@@ -124,8 +121,6 @@ function getWeekNumber(d) {
   return Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
 }
 
-// ─── Génération d'un record ───────────────────────────────────
-// FIX 1 : breakdownState passé en paramètre (pas global)
 function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, breakdownState, maintenanceDates) {
   if (WEEKLY_PATTERN[dayOfWeek] === null) return null;
   if (isTunisianHoliday(dateStr))        return null;
@@ -135,11 +130,9 @@ function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, brea
   const ramadan       = isRamadan(dateStr);
   const isMaintenance = maintenanceDates.has(`${workUnit}::${dateStr}`);
 
-  // Panne en cours
   if (breakdownState[workUnit] > 0) {
     breakdownState[workUnit]--;
-    if (Math.random() < 0.7) return null; // arrêt total
-    // FIX 2 : production dégradée explicitement retournée
+    if (Math.random() < 0.7) return null;
     const degradedQty = Math.max(20, Math.round(cfg.base * randomFloat(0.15, 0.30)));
     return {
       goodQty:            degradedQty,
@@ -152,7 +145,6 @@ function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, brea
     };
   }
 
-  // Nouvelle panne
   if (Math.random() < cfg.breakdownProb) {
     breakdownState[workUnit] = random(1, 3);
     const downtime   = random(14400, 25200);
@@ -169,7 +161,6 @@ function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, brea
     };
   }
 
-  // Maintenance planifiée
   if (isMaintenance) {
     const upSec = random(14400, 18000);
     const qty   = Math.max(30, Math.round(cfg.base * 0.35 * (upSec / 28800)));
@@ -184,13 +175,12 @@ function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, brea
     };
   }
 
-  // Production normale
   const weeklyFactor  = WEEKLY_PATTERN[dayOfWeek];
   const monthlyFactor = MONTHLY_FACTORS[monthIndex] ?? 1.0;
   const trendFactor   = 1 + (dayIndex * cfg.trend) / 10000;
   const ramadanFactor = ramadan ? randomFloat(0.68, 0.78) : 1.0;
   const dailyFactor   = randomFloat(0.90, 1.10);
-  const noise         = gaussianNoise(); // ±2σ borné
+  const noise         = gaussianNoise();
 
   const theoreticalQty = cfg.base * trendFactor * weeklyFactor * monthlyFactor * ramadanFactor * dailyFactor;
   const goodQty        = Math.max(40, Math.round(theoreticalQty + noise * cfg.noiseRatio * cfg.base));
@@ -212,14 +202,9 @@ function generateRecord(workUnit, dateStr, dayIndex, dayOfWeek, monthIndex, brea
   };
 }
 
-// ─── Génération ───────────────────────────────────────────────
 const startDate = new Date("2023-06-05");
 const endDate   = new Date("2026-06-04");
-
-// FIX 3 : précalcul des dates de maintenance
 const maintenanceDates = buildMaintenanceDates(startDate, endDate);
-
-// FIX 1 : un breakdownState indépendant par run (pas global)
 const breakdownState = { "WU-A1": 0, "WU-B1": 0, "WU-C1": 0 };
 
 const records = [];
@@ -255,7 +240,6 @@ for (
       upSeconds:          production.upSeconds,
       workSeconds:        production.workSeconds,
       eventType:          production.eventType,
-      // FIX 5 : variables explicatives pour le modèle de prévision
       dayOfWeek,
       weekNumber:         getWeekNumber(d),
       monthIndex,
@@ -265,7 +249,6 @@ for (
   }
 }
 
-// ─── Résumé ───────────────────────────────────────────────────
 console.log(`\n📊 Résumé par Work Unit :`);
 for (const wu of WORK_UNITS) {
   const r      = records.filter((x) => x.workUnit === wu);
@@ -277,7 +260,6 @@ for (const wu of WORK_UNITS) {
   console.log(`    Pannes: ${r.filter(x=>x.eventType==="PANNE").length}j | Pannes partielles: ${r.filter(x=>x.eventType==="PANNE_PARTIELLE").length}j | Ramadan: ${r.filter(x=>x.eventType==="RAMADAN").length}j | Maintenance: ${r.filter(x=>x.eventType==="MAINTENANCE").length}j`);
 }
 
-// ─── Insertion ────────────────────────────────────────────────
 await ProductionDaily.deleteMany({ _isDemo: true });
 const BATCH_SIZE = 500;
 for (let i = 0; i < records.length; i += BATCH_SIZE) {
@@ -287,7 +269,6 @@ for (let i = 0; i < records.length; i += BATCH_SIZE) {
 
 console.log("\n\n✅ Seed corrigé terminé !");
 console.log(`   → ${records.length} records | du ${formatDate(startDate)} au ${formatDate(endDate)}`);
-console.log("   → Réentraîne : curl -X DELETE http://localhost:4000/api/forecast/clear-cache");
 
 await mongoose.disconnect();
 process.exit(0);
